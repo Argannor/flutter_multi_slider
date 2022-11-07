@@ -37,6 +37,7 @@ class MultiSlider extends StatefulWidget {
     this.height = 45,
     this.divisions,
     this.valueRangePainterCallback,
+    this.allowOverlap = true,
     Key? key,
   })  : assert(divisions == null || divisions > 0),
         assert(max - min >= 0),
@@ -44,11 +45,13 @@ class MultiSlider extends StatefulWidget {
         super(key: key) {
     final valuesCopy = [...values]..sort();
 
-    for (int index = 0; index < valuesCopy.length; index++) {
-      assert(
-        valuesCopy[index] == values[index],
-        'MultiSlider: values must be in ascending order!',
-      );
+    if (!this.allowOverlap) {
+      for (int index = 0; index < valuesCopy.length; index++) {
+        assert(
+          valuesCopy[index] == values[index],
+          'MultiSlider: values must be in ascending order!',
+        );
+      }
     }
     assert(
       values.first >= min && values.last <= max,
@@ -88,6 +91,9 @@ class MultiSlider extends StatefulWidget {
 
   /// Number of divisions for discrete Slider.
   final int? divisions;
+
+  /// Allows sliders to overlap
+  final bool allowOverlap;
 
   /// Used to decide how a line between values or the boundaries should be painted.
   /// Returns [bool] and pass an [ValueRange] object as parameter.
@@ -217,12 +223,18 @@ class _MultiSliderState extends State<MultiSlider> {
   }
 
   double _calculateInnerBound() {
+    if(widget.allowOverlap) {
+      return widget.min;
+    }
     return _selectedInputIndex == 0
         ? widget.min
         : widget.values[_selectedInputIndex! - 1];
   }
 
   double _calculateOuterBound() {
+    if(widget.allowOverlap) {
+      return widget.max;
+    }
     return _selectedInputIndex == widget.values.length - 1
         ? widget.max
         : widget.values[_selectedInputIndex! + 1];

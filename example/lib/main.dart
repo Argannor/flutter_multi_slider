@@ -9,9 +9,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Flutter Demo',
-    home: MyHomePage(),
-  );
+        title: 'Flutter Demo',
+        home: MyHomePage(),
+      );
 }
 
 class MyHomePage extends StatefulWidget {
@@ -20,16 +20,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<double> monday = [0.1, 0.2];
-  List<double> tuesday = [0.1, 0.2, 0.4, 0.5];
-  List<double> wednesday = [0.1, 0.2];
-  List<double> thursday = [0.1, 0.2, 0.4, 0.5, 0.6, 0.7];
-  List<double> friday = [0.1, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
-  bool mondayEnabled = true;
-  bool tuesdayEnabled = true;
-  bool wednesdayEnabled = true;
-  bool thursdayEnabled = true;
-  bool fridayEnabled = true;
+  List<double> bedValues = [0.1, 0.2, 0.4, 0.5];
+  bool bedEnabled = true;
 
   @override
   Widget build(BuildContext context) {
@@ -39,40 +31,12 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: ListView(
         children: <Widget>[
-          WeekDaySchedule(
-            weekDay: 'Monday',
-            values: monday,
-            onChanged: (value) => setState(() => monday = value),
-            enabled: mondayEnabled,
-            onToggle: (value) => setState(() => mondayEnabled = value),
-          ),
-          WeekDaySchedule(
-            weekDay: 'Tuesday',
-            values: tuesday,
-            onChanged: (value) => setState(() => tuesday = value),
-            enabled: tuesdayEnabled,
-            onToggle: (value) => setState(() => tuesdayEnabled = value),
-          ),
-          WeekDaySchedule(
-            weekDay: 'Wednesday',
-            values: wednesday,
-            onChanged: (value) => setState(() => wednesday = value),
-            enabled: wednesdayEnabled,
-            onToggle: (value) => setState(() => wednesdayEnabled = value),
-          ),
-          WeekDaySchedule(
-            weekDay: 'Thursday',
-            values: thursday,
-            onChanged: (value) => setState(() => thursday = value),
-            enabled: thursdayEnabled,
-            onToggle: (value) => setState(() => thursdayEnabled = value),
-          ),
-          WeekDaySchedule(
-            weekDay: 'Friday',
-            values: friday,
-            onChanged: (value) => setState(() => friday = value),
-            enabled: fridayEnabled,
-            onToggle: (value) => setState(() => fridayEnabled = value),
+          Strip(
+            name: 'Bed',
+            values: bedValues,
+            onChanged: (value) => setState(() => bedValues = value),
+            enabled: bedEnabled,
+            onToggle: (value) => setState(() => bedEnabled = value),
           ),
         ],
       ), // This trailing comma makes auto-formatting nicer for build methods.
@@ -80,10 +44,10 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 }
 
-class WeekDaySchedule extends StatelessWidget {
-  const WeekDaySchedule({
+class Strip extends StatelessWidget {
+  const Strip({
     required this.values,
-    required this.weekDay,
+    required this.name,
     required this.onChanged,
     required this.onToggle,
     required this.enabled,
@@ -92,7 +56,7 @@ class WeekDaySchedule extends StatelessWidget {
 
   final List<double> values;
 
-  final String weekDay;
+  final String name;
 
   final ValueChanged<List<double>> onChanged;
 
@@ -113,8 +77,8 @@ class WeekDaySchedule extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    weekDay + ' schedule',
-                    style: TextStyle(
+                    name,
+                    style: const TextStyle(
                         color: Colors.blue,
                         fontWeight: FontWeight.w600,
                         fontSize: 18),
@@ -125,39 +89,27 @@ class WeekDaySchedule extends StatelessWidget {
             ),
           ),
           MultiSlider(
-            values: values,
-            onChanged: enabled ? onChanged : null,
-            valueRangePainterCallback: (range) => range.index % 2 == 1,
-            divisions: 48,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 19.0, vertical: 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('0h', style: chartTextFont),
-                Text('6h', style: chartTextFont),
-                Text('12h', style: chartTextFont),
-                Text('18h', style: chartTextFont),
-                Text('24h', style: chartTextFont),
-              ],
-            ),
-          ),
-          SizedBox(height: 8),
+              values: values,
+              onChanged: enabled ? onChanged : null,
+              valueRangePainterCallback: (range) => range.index % 2 == 1,
+              divisions: null,
+              min: 0,
+              max: 255),
+          const SizedBox(height: 8),
           if (enabled) ...[
             for (int index = 0; index < values.length; index += 2)
               Padding(
                 padding: const EdgeInsets.only(left: 8, bottom: 2),
                 child: Text(
-                  'Shift ${index ~/ 2 + 1} starts at ${lerpTime(values[index])} and ends at ${lerpTime(values[index + 1])}.',
+                  'Light range ${index ~/ 2 + 1} starts at ${values[index].round()} and ends at ${values[index + 1].round()}.',
                 ),
               ),
           ] else
-            Padding(
-              padding: const EdgeInsets.only(left: 8, bottom: 2),
-              child: Text('No shifts today.'),
+            const Padding(
+              padding: EdgeInsets.only(left: 8, bottom: 2),
+              child: Text('No lights.'),
             ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
         ],
       ),
     );
