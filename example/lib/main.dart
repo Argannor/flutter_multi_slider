@@ -2,14 +2,16 @@ import 'package:example/time.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_multi_slider/flutter_multi_slider.dart';
 
-void main() => runApp(MyApp());
+void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'Flutter Demo',
-        home: MyHomePage(),
-      );
+    title: 'Flutter Demo',
+    home: MyHomePage(),
+  );
 }
 
 class MyHomePage extends StatefulWidget {
