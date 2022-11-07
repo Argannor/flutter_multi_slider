@@ -1,17 +1,66 @@
-import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
+import 'package:flutter/material.dart';
+import 'package:flutter_multi_slider/flutter_multi_slider.dart';
+
+class ValueRange extends Comparable<ValueRange>{
+  ValueRange(
+      {required this.start,
+      required this.end,
+      this.activeTrackColorPaint,
+      this.inactiveTrackColorPaint});
+
+  double start;
+  double end;
+
+  final Paint? activeTrackColorPaint;
+  final Paint? inactiveTrackColorPaint;
+
+  double min() => math.min(start, end);
+
+  double max() => math.max(start, end);
+
+  ValueRange apply(DoubleOperator operator) {
+    return ValueRange(
+        start: operator(this.start),
+        end: operator(this.end),
+        activeTrackColorPaint: this.activeTrackColorPaint,
+        inactiveTrackColorPaint: this.inactiveTrackColorPaint);
+  }
+
+  @override
+  int compareTo(ValueRange other) {
+    return this.min().compareTo(other.min());
+  }
+}
+
+class RangeIndex {
+  final int index;
+  final RangeBoundary boundary;
+
+  RangeIndex(this.index, this.boundary);
+
+  double _get(ValueRange range) {
+    return boundary == RangeBoundary.START ? range.start : range.end;
+  }
+
+  void _set(ValueRange range, double value) {
+    boundary == RangeBoundary.START ? range.start = value : range.end = value;
+  }
+
+  double get(List<ValueRange> list) => _get(list[index]);
+
+  void set(List<ValueRange> list, double value) => _set(list[index], value);
+}
+
+enum RangeBoundary { START, END }
+
 /// Used in [ValueRangePainterCallback] as parameter.
-/// Every range between the edges of [MultiSlider] generate an [ValueRange].
+/// Every range between the edges of [MultiSlider] generate an [DrawValueRange].
 /// Do NOT be mistaken with discrete intervals made by [divisions]!
-class ValueRange {
-  const ValueRange(
-    this.start,
-    this.end,
-    this.index,
-    this.isFirst,
-    this.isLast,
-  );
+class DrawValueRange extends Comparable<DrawValueRange> {
+  DrawValueRange(this.start, this.end, this.index, this.isFirst,
+      this.isLast, this.activeTrackColorPaint, this.inactiveTrackColorPaint);
 
   final double start;
   final double end;
@@ -19,10 +68,19 @@ class ValueRange {
   final bool isFirst;
   final bool isLast;
 
+  final Paint activeTrackColorPaint;
+  final Paint inactiveTrackColorPaint;
+
   bool contains(double x) => x >= start && x <= end;
+
+  @override
+  int compareTo(DrawValueRange other) {
+    throw this.start.compareTo(other.start);
+  }
 }
 
-typedef ValueRangePainterCallback = bool Function(ValueRange valueRange);
+typedef ValueRangePainterCallback = bool Function(DrawValueRange valueRange);
+typedef DoubleOperator = double Function(double original);
 
 class MultiSlider extends StatefulWidget {
   MultiSlider({
@@ -54,7 +112,8 @@ class MultiSlider extends StatefulWidget {
       }
     }
     assert(
-      values.first >= min && values.last <= max,
+      values.any((range) => range.min() >= min) &&
+          values.any((range) => range.max() <= max),
       'MultiSlider: At least one value is outside of min/max boundaries!',
     );
   }
@@ -78,16 +137,16 @@ class MultiSlider extends StatefulWidget {
   final Color? color;
 
   /// List of ordered values which will be changed by user gestures with this widget.
-  final List<double> values;
+  final List<ValueRange> values;
 
   /// Callback for every user slide gesture.
-  final ValueChanged<List<double>>? onChanged;
+  final ValueChanged<List<ValueRange>>? onChanged;
 
   /// Callback for every time user click on this widget.
-  final ValueChanged<List<double>>? onChangeStart;
+  final ValueChanged<List<ValueRange>>? onChangeStart;
 
   /// Callback for every time user stop click/slide on this widget.
-  final ValueChanged<List<double>>? onChangeEnd;
+  final ValueChanged<List<ValueRange>>? onChangeEnd;
 
   /// Number of divisions for discrete Slider.
   final int? divisions;
@@ -96,7 +155,7 @@ class MultiSlider extends StatefulWidget {
   final bool allowOverlap;
 
   /// Used to decide how a line between values or the boundaries should be painted.
-  /// Returns [bool] and pass an [ValueRange] object as parameter.
+  /// Returns [bool] and pass an [DrawValueRange] object as parameter.
   final ValueRangePainterCallback? valueRangePainterCallback;
 
   @override
@@ -105,7 +164,7 @@ class MultiSlider extends StatefulWidget {
 
 class _MultiSliderState extends State<MultiSlider> {
   double? _maxWidth;
-  int? _selectedInputIndex;
+  RangeIndex? _selectedInputIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -141,8 +200,9 @@ class _MultiSliderState extends State<MultiSlider> {
                     sliderTheme.disabledInactiveTrackColor ??
                         theme.colorScheme.onSurface.withOpacity(0.12),
                 selectedInputIndex: _selectedInputIndex,
-                values:
-                    widget.values.map(_convertValueToPixelPosition).toList(),
+                values: widget.values
+                    .map((range) => range.apply(_convertValueToPixelPosition))
+                    .toList(),
                 horizontalPadding: widget.horizontalPadding,
               ),
             ),
@@ -160,7 +220,7 @@ class _MultiSliderState extends State<MultiSlider> {
       details.localPosition.dx,
     );
 
-    int index = _findNearestValueIndex(valuePosition);
+    RangeIndex index = _findNearestValueIndex(valuePosition);
 
     setState(() => _selectedInputIndex = index);
 
@@ -195,80 +255,70 @@ class _MultiSliderState extends State<MultiSlider> {
     return value;
   }
 
-  List<double> updateInternalValues(double xPosition) {
+  List<ValueRange> updateInternalValues(double xPosition) {
     if (_selectedInputIndex == null) return widget.values;
 
-    List<double> copiedValues = [...widget.values];
+    List<ValueRange> copiedValues = [...widget.values];
 
     double convertedPosition = _convertPixelPositionToValue(xPosition);
-
-    copiedValues[_selectedInputIndex!] = convertedPosition.clamp(
+    convertedPosition = convertedPosition.clamp(
       _calculateInnerBound(),
       _calculateOuterBound(),
     );
-
     if (widget.divisions != null) {
-      return copiedValues
-          .map<double>(
-            (value) => _getDiscreteValue(
-              value,
-              widget.min,
-              widget.max,
-              widget.divisions!,
-            ),
-          )
-          .toList();
+      convertedPosition = _getDiscreteValue(
+        convertedPosition,
+        widget.min,
+        widget.max,
+        widget.divisions!,
+      );
     }
+    _selectedInputIndex!.set(copiedValues, convertedPosition);
+
     return copiedValues;
   }
 
   double _calculateInnerBound() {
-    if(widget.allowOverlap) {
+    if (widget.allowOverlap) {
       return widget.min;
     }
-    return _selectedInputIndex == 0
+    return _selectedInputIndex!.index == 0
         ? widget.min
-        : widget.values[_selectedInputIndex! - 1];
+        : widget.values[_selectedInputIndex!.index - 1].end;
   }
 
   double _calculateOuterBound() {
-    if(widget.allowOverlap) {
+    if (widget.allowOverlap) {
       return widget.max;
     }
-    return _selectedInputIndex == widget.values.length - 1
+    return _selectedInputIndex!.index == widget.values.length - 1
         ? widget.max
-        : widget.values[_selectedInputIndex! + 1];
+        : widget.values[_selectedInputIndex!.index + 1].start;
   }
 
-  int _findNearestValueIndex(double convertedPosition) {
-    if (widget.values.length == 1) return 0;
-
-    List<double> differences = widget.values
-        .map<double>((double value) => (value - convertedPosition).abs())
+  RangeIndex _findNearestValueIndex(double convertedPosition) {
+    List<ValueRange> differences = widget.values
+        .map((ValueRange value) =>
+            value.apply(((x) => (x - convertedPosition).abs())))
         .toList();
-    double minDifference = differences.reduce(
-      (previousValue, value) => value < previousValue ? value : previousValue,
-    );
+    List<ValueRange> sortedDifferences = List.from(differences);
+    sortedDifferences.sort((a, b) => a.min().compareTo(b.min()));
 
-    int minDifferenceFirstIndex = differences.indexOf(minDifference);
-    int minDifferenceLastIndex = differences.lastIndexOf(minDifference);
-
-    bool hasCollision = minDifferenceLastIndex != minDifferenceFirstIndex;
-
-    if (hasCollision &&
-        (convertedPosition > widget.values[minDifferenceFirstIndex])) {
-      return minDifferenceLastIndex;
-    }
-    return minDifferenceFirstIndex;
+    int index = differences.indexOf(sortedDifferences[0]);
+    return RangeIndex(
+        index,
+        sortedDifferences[0].start == sortedDifferences[0].min()
+            ? RangeBoundary.START
+            : RangeBoundary.END);
   }
 
-  bool _defaultDivisionPainterCallback(ValueRange division) =>
-      !division.isFirst && !division.isLast;
+  bool _defaultDivisionPainterCallback(DrawValueRange division) =>
+      !division.isLast;
 }
 
 class _MultiSliderPainter extends CustomPainter {
-  final List<double> values;
-  final int? selectedInputIndex;
+  final List<ValueRange> values;
+  final RangeIndex? selectedInputIndex;
   final double horizontalPadding;
   final Paint activeTrackColorPaint;
   final Paint bigCircleColorPaint;
@@ -304,34 +354,25 @@ class _MultiSliderPainter extends CustomPainter {
     final canvasStart = horizontalPadding;
     final canvasEnd = size.width - horizontalPadding;
 
-    List<ValueRange> _makeRanges(
-      List<double> innerValues,
+    List<DrawValueRange> _makeRanges(
+      List<ValueRange> innerValues,
       double start,
       double end,
     ) {
-      final values = <double>[
-        start,
+      int index = 0;
+      Paint sliderPaint = _paintFromColor(Colors.black, true);
+      return [
+        DrawValueRange(start, end, index, index == 0, true, sliderPaint, sliderPaint),
         ...innerValues
-            .map<double>(divisions == null
-                ? (v) => v
-                : (v) => _getDiscreteValue(v, start, end, divisions!))
-            .toList(),
-        end
+            .map((e) => e.apply((original) => divisions == null ? original : _getDiscreteValue(original, start, end, divisions!)))
+            .map((e) => DrawValueRange(e.start, e.end, index++, index == 0, false, e.activeTrackColorPaint != null ? e.activeTrackColorPaint! : activeTrackColorPaint,  e.inactiveTrackColorPaint != null ? e.inactiveTrackColorPaint! : inactiveTrackColorPaint)),
+
       ];
-      return List<ValueRange>.generate(
-        values.length - 1,
-        (index) => ValueRange(
-          values[index],
-          values[index + 1],
-          index,
-          index == 0,
-          index == values.length - 2,
-        ),
-      );
     }
 
     final valueRanges = _makeRanges(values, canvasStart, canvasEnd);
-
+    // canvas.drawRect(size, _paintFromColor(Colors.black));
+    // canvas.drawColor(Colors.black, BlendMode.src);
     canvas.drawArc(
       Rect.fromCircle(
         center: Offset(valueRanges.first.start, halfHeight),
@@ -358,13 +399,13 @@ class _MultiSliderPainter extends CustomPainter {
           : inactiveTrackColorPaint,
     );
 
-    for (ValueRange valueRange in valueRanges) {
+    for (DrawValueRange valueRange in valueRanges) {
       canvas.drawLine(
         Offset(valueRange.start, halfHeight),
         Offset(valueRange.end, halfHeight),
         valueRangePainterCallback(valueRange)
-            ? activeTrackColorPaint
-            : inactiveTrackColorPaint,
+            ? valueRange.activeTrackColorPaint
+            : valueRange.inactiveTrackColorPaint,
       );
     }
 
@@ -389,29 +430,32 @@ class _MultiSliderPainter extends CustomPainter {
       }
     }
 
-    for (int i = 0; i < values.length; i++) {
-      double x = divisions == null
-          ? values[i]
-          : _getDiscreteValue(values[i], canvasStart, canvasEnd, divisions!);
+    for (RangeBoundary b in RangeBoundary.values) {
+      for (int i = 0; i < values.length; i++) {
+        double x = b == RangeBoundary.START ? values[i].start : values[i].end;
+        x = divisions == null
+            ? x
+            : _getDiscreteValue(x, canvasStart, canvasEnd, divisions!);
 
-      canvas.drawCircle(
-        Offset(x, halfHeight),
-        10,
-        _paintFromColor(Colors.white),
-      );
-
-      canvas.drawCircle(
-        Offset(x, halfHeight),
-        10,
-        activeTrackColorPaint,
-      );
-
-      if (selectedInputIndex == i)
         canvas.drawCircle(
           Offset(x, halfHeight),
-          22.5,
-          bigCircleColorPaint,
+          10,
+          _paintFromColor(Colors.white),
         );
+
+        canvas.drawCircle(
+          Offset(x, halfHeight),
+          10,
+          activeTrackColorPaint,
+        );
+
+        if (selectedInputIndex == i)
+          canvas.drawCircle(
+            Offset(x, halfHeight),
+            22.5,
+            bigCircleColorPaint,
+          );
+      }
     }
   }
 
