@@ -111,11 +111,13 @@ class MultiSlider extends StatefulWidget {
         );
       }
     }
-    assert(
+    if (values.length > 0) {
+      assert(
       values.any((range) => range.min() >= min) &&
           values.any((range) => range.max() <= max),
       'MultiSlider: At least one value is outside of min/max boundaries!',
-    );
+      );
+    }
   }
 
   /// [MultiSlider] maximum value.
